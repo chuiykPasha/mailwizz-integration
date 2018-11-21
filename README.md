@@ -1,0 +1,2 @@
+# mailwizz-integration
+
