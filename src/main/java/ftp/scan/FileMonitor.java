@@ -30,6 +30,7 @@ public class FileMonitor {
     private final String PROCESSING_PATH = "/ftp/PROCESSING";
     private final String PROCESSED_PATH = "/ftp/PROCESSED";
     private final String FAILED_PATH = "/ftp/FAILED";
+    @Autowired
     private RedissonClient redisson;
     private ExecutorService executor;
     @Value("${ftp.connection}")
@@ -38,13 +39,6 @@ public class FileMonitor {
     private String ftpUserName;
     @Value("${ftp.user.password}")
     private String ftpUserPassword;
-
-    public FileMonitor(@Value("${redis.connection}") String connection) {
-        Config config = new Config();
-        config.useSingleServer()
-                .setAddress(connection);
-        redisson = Redisson.create(config);
-    }
 
     @Scheduled(fixedDelayString = "${intervalForScan.in.milliseconds}")
     public void pollFiles() throws InterruptedException {
