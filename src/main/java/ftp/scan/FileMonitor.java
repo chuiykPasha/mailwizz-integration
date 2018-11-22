@@ -165,8 +165,7 @@ public class FileMonitor {
             logger.error("Wrong header, can't get values");
             return false;
         }
-
-
+        
         for (CSVRecord record : records) {
             try {
                 if (redisson.getKeys().isExists(record.get(emailAlias)) == NOT_EXISTS) {
