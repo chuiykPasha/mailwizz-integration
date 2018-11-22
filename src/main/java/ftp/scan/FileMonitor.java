@@ -1,6 +1,5 @@
 package ftp.scan;
 
-import ch.qos.logback.core.util.FileUtil;
 import com.opencsv.CSVReader;
 import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPClient;
@@ -26,7 +25,7 @@ public class FileMonitor {
 
     public FileMonitor() throws IOException {
         ftpClient.configure(new FTPClientConfig(FTPClientConfig.SYST_UNIX));
-        ftpClient.connect("192.168.0.101");
+        ftpClient.connect("192.168.0.102");
         ftpClient.login("test", "user");
         ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
     }
@@ -35,19 +34,25 @@ public class FileMonitor {
     public void pollFiles() throws IOException {
         ExecutorService executor = Executors.newFixedThreadPool(COUNT_THREADS);
 
-        FileDto file = null;
+        String fileName = null;
         try {
-            file = getFirstFile();
+            fileName = getFirstFile();
         } catch (IOException e) {
-            logger.error("Can't download file");
+            logger.error("Error get file", e);
         }
 
-        if(file == null){
-            System.out.println(ftpClient.printWorkingDirectory());
+        if(fileName == null){
+            logger.info("Can't find fileName");
             return;
         }
 
-        CSVReader reader = new CSVReader(new InputStreamReader(file.getStream()));
+        logger.info("Get file " + fileName);
+        ftpClient.rename(fileName, PROCESSING_PATH + "/" + fileName);
+        logger.info(fileName + " change directory to " + PROCESSING_PATH);
+
+        ftpClient.changeWorkingDirectory(PROCESSING_PATH);
+        CSVReader reader = new CSVReader(new InputStreamReader(retrieveFile(fileName)));
+
         String[] nextRecord;
         while ((nextRecord = reader.readNext()) != null) {
             for(String line : nextRecord){
@@ -55,36 +60,44 @@ public class FileMonitor {
             }
         }
 
-        System.out.println(ftpClient.getReplyString());
-        System.out.println(ftpClient.printWorkingDirectory());
-        ftpClient.changeWorkingDirectory(PROCESSING_PATH);
-        System.out.println(ftpClient.printWorkingDirectory());
-        ftpClient.rename(file.getFilePath(), PROCESSED_PATH + "/" + file.getName());
-
+        logger.info("File " + fileName + " csv reader complete");
+        ftpClient.rename(fileName, PROCESSED_PATH + "/" + fileName);
+        logger.info(fileName + " change directory to " + PROCESSED_PATH);
     }
 
-    private FileDto getFirstFile() throws IOException {
-        FTPFile[] files;
+    private String getFirstFile() throws IOException {
         ftpClient.changeWorkingDirectory(ROOT_PATH);
+        FTPFile[] files;
 
         try {
             files = ftpClient.listFiles("");
         } catch (IOException e) {
-            logger.error("Wrong path", e);
+            logger.error("Wrong current directory", e);
             return null;
         }
 
         for(FTPFile file : files){
             if(file.isFile()){
-                String filePath = PROCESSING_PATH + "/" + file.getName();
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                ftpClient.retrieveFile(file.getName(), outputStream);
-                InputStream inputstream = new ByteArrayInputStream(outputStream.toByteArray());
-                ftpClient.rename(file.getName(), PROCESSING_PATH + "/" + file.getName());
-                return new FileDto(inputstream, filePath, file.getName());
+                return file.getName();
             }
         }
 
         return null;
+    }
+
+    private InputStream retrieveFile(String name){
+        InputStream inputStream = null;
+
+        try {
+            inputStream = ftpClient.retrieveFileStream(name);
+
+            if(ftpClient.completePendingCommand()){
+                logger.info("Retrive file complete");
+            }
+        } catch (IOException e) {
+            logger.error("Can't retrive file " + name, e);
+        }
+
+        return inputStream;
     }
 }
