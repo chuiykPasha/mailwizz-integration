@@ -1,6 +1,7 @@
 package ftp.scan;
 
 import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.net.ftp.*;
 import org.redisson.Redisson;
@@ -17,6 +18,9 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.io.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +43,8 @@ public class FileMonitor {
     private String ftpUserName;
     @Value("${ftp.user.password}")
     private String ftpUserPassword;
+    @Autowired
+    private Configuration configuration;
 
     @Scheduled(fixedDelayString = "${intervalForScan.in.milliseconds}")
     public void pollFiles() throws InterruptedException {
@@ -129,13 +135,18 @@ public class FileMonitor {
     }
 
     private boolean processingFile(InputStream file) {
+        String emailAlias;
+        String fNameAlias;
+        String sNameAlias;
+        Set<String> csvHeader;
+
         if(file == null){
             return false;
         }
 
         final int NOT_EXISTS = 0;
         Reader in = new InputStreamReader(file);
-        Iterable<CSVRecord> records;
+        CSVParser records;
 
         try {
             records = CSVFormat.RFC4180.withFirstRecordAsHeader().parse(in);
@@ -144,14 +155,26 @@ public class FileMonitor {
             return false;
         }
 
+        csvHeader = records.getHeaderMap().keySet();
+
+        emailAlias = getEqualsColumn(csvHeader, configuration.getFieldToAliases().get("Email"));
+        fNameAlias = getEqualsColumn(csvHeader, configuration.getFieldToAliases().get("First name"));
+        sNameAlias = getEqualsColumn(csvHeader, configuration.getFieldToAliases().get("Last name"));
+
+        if(emailAlias == null || fNameAlias == null || sNameAlias == null){
+            logger.error("Wrong header, can't get values");
+            return false;
+        }
+
+
         for (CSVRecord record : records) {
             try {
-                if (redisson.getKeys().isExists(record.get("email")) == NOT_EXISTS) {
-                    executor.submit(() -> System.out.println(record.get("fname") + "," + record.get("lname") + "," + record.get("email")));
-                    RBucket<Boolean> bucket = redisson.getBucket(record.get("email"));
+                if (redisson.getKeys().isExists(record.get(emailAlias)) == NOT_EXISTS) {
+                    executor.submit(() -> System.out.println(record.get(fNameAlias) + "," + record.get(sNameAlias) + "," + record.get(emailAlias)));
+                    RBucket<Boolean> bucket = redisson.getBucket(record.get(emailAlias));
                     bucket.set(Boolean.TRUE);
                 } else {
-                    logger.info("Email:" + record.get("email") + " already exists. Don't call api");
+                    logger.info("Email:" + record.get(emailAlias) + " already exists. Don't call api");
                 }
             }catch (Exception e){
                 logger.error("Failed parse string", e);
@@ -159,6 +182,19 @@ public class FileMonitor {
         }
 
         return true;
+    }
+
+    private String getEqualsColumn(Set<String> header, List<String> aliases){
+        String result = null;
+
+        for(String alias : aliases){
+            if(header.contains(alias)){
+                result = alias;
+                return result;
+            }
+        }
+
+        return null;
     }
 
     private String getFirstFile() {

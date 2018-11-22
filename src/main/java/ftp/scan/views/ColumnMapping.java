@@ -48,7 +48,7 @@ public class ColumnMapping extends VerticalLayout {
         Map<String, List<String>> save = new HashMap<>();
 
         for(TextField textField : textFields){
-            save.put(textField.getLabel(), Arrays.asList(textField.getValue().split(" , ")));
+            save.put(textField.getLabel(), Arrays.asList(textField.getValue().split(",")));
         }
 
         RBucket<Map<String, List<String>>> bucket = redisson.getBucket(columnMappingKey);
