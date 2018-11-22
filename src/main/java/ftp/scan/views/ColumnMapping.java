@@ -2,6 +2,7 @@ package ftp.scan.views;
 
 import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Label;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -29,14 +30,15 @@ public class ColumnMapping extends VerticalLayout {
     public ColumnMapping(Configuration configuration){
         this.configuration = configuration;
 
+        setAlignItems(Alignment.CENTER);
         add(new Label("Column names mapping configuration"));
         this.configuration.getFieldToAliases().forEach((k, v) -> {
-            HorizontalLayout hl = new HorizontalLayout();
-            hl.setWidth("100%");
-            TextField aliases = new TextField(k);
+            FormLayout hl = new FormLayout();
+            hl.setWidth("1200px");
+            TextField aliases = new TextField();
             aliases.setValue(String.join(",", v));
-            aliases.setWidth("500px");
-            hl.add(aliases);
+            aliases.setWidth("800px");
+            hl.addFormItem(aliases, k);
             textFields.add(aliases);
             add(hl);
         });
