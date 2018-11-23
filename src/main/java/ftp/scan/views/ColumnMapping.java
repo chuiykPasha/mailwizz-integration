@@ -4,14 +4,11 @@ import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Label;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import ftp.scan.Configuration;
 import ftp.scan.HeaderService;
-import org.redisson.api.RBucket;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -38,6 +35,7 @@ public class ColumnMapping extends VerticalLayout {
             TextField aliases = new TextField();
             aliases.setValue(String.join(",", v));
             aliases.setWidth("800px");
+            aliases.setPlaceholder(k);
             hl.addFormItem(aliases, k);
             textFields.add(aliases);
             add(hl);
@@ -52,7 +50,7 @@ public class ColumnMapping extends VerticalLayout {
         Map<String, List<String>> save = new HashMap<>();
 
         for(TextField textField : textFields){
-            save.put(textField.getLabel(), Arrays.asList(textField.getValue().split(",")));
+            save.put(textField.getPlaceholder(), Arrays.asList(textField.getValue().split(",")));
         }
 
         headerService.saveHeaders(save);
