@@ -45,54 +45,57 @@ public class FileMonitor {
     private String ftpUserPassword;
     @Autowired
     private ConfigService configService;
+    private String fileName;
 
     @Scheduled(fixedDelayString = "${intervalForScan.in.milliseconds}")
-    public void pollFiles() throws InterruptedException {
-        if(!ftpClient.isConnected()) {
-            try {
-                if(!connectToFTP()){
+    public void pollFiles() {
+        try {
+            if (!ftpClient.isConnected()) {
+                try {
+                    if (!connectToFTP()) {
+                        return;
+                    }
+                } catch (IOException e) {
+                    logger.error("Can't connect to ftp server", e);
                     return;
                 }
-            } catch (IOException e) {
-                logger.error("Can't connect to ftp server", e);
+            }
+
+            executor = Executors.newFixedThreadPool(COUNT_THREADS);
+            fileName = null;
+            fileName = getFirstFile();
+
+            if (fileName == null) {
+                logger.info("Can't find file");
                 return;
             }
+
+            logger.info("Find file " + fileName);
+            logger.info(fileName + " change directory to " + PROCESSING_PATH);
+            ftpClient.rename(fileName, PROCESSING_PATH + "/" + fileName);
+
+            ftpClient.changeWorkingDirectory(PROCESSING_PATH);
+
+            processingFile(retrieveFile(fileName));
+
+            executor.shutdown();
+
+            while (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                logger.info("Awaiting completion of threads.");
+            }
+
+            logger.info("File " + fileName + " csv reader complete");
+            logger.info(fileName + " change directory to " + PROCESSED_PATH);
+            ftpClient.rename(fileName, PROCESSED_PATH + "/" + fileName);
+        } catch (Exception e) {
+            logger.error("Can't process file", e);
+            try {
+                logger.info(fileName + " change directory to " + FAILED_PATH);
+                ftpClient.rename(fileName, FAILED_PATH + "/" + fileName);
+            } catch (IOException exc) {
+                logger.error("Can't transfer file to " + FAILED_PATH, exc);
+            }
         }
-
-        executor = Executors.newFixedThreadPool(COUNT_THREADS);
-        String fileName = null;
-        fileName = getFirstFile();
-
-        if(fileName == null){
-            logger.info("Can't find file");
-            return;
-        }
-
-        logger.info("Find file " + fileName);
-        logger.info(fileName + " change directory to " + PROCESSING_PATH);
-        if(!changeFileDirectory(fileName, PROCESSING_PATH + "/" + fileName)){
-            return;
-        }
-
-        if(!changeDirectory(PROCESSING_PATH)){
-            return;
-        }
-
-        if(!processingFile(retrieveFile(fileName))){
-            logger.info(fileName + " change directory to " + FAILED_PATH);
-            changeFileDirectory(fileName, FAILED_PATH + "/" + fileName);
-            return;
-        }
-
-        executor.shutdown();
-
-        while (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
-            logger.info("Awaiting completion of threads.");
-        }
-
-        logger.info("File " + fileName + " csv reader complete");
-        logger.info(fileName + " change directory to " + PROCESSED_PATH);
-        changeFileDirectory(fileName, PROCESSED_PATH + "/" + fileName);
     }
 
     private boolean connectToFTP() throws IOException {
@@ -112,48 +115,21 @@ public class FileMonitor {
         return true;
     }
 
-    private boolean changeDirectory(String path){
-        try {
-            ftpClient.changeWorkingDirectory(path);
-        } catch (IOException e) {
-            logger.error("Can't change directory to " + path);
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean changeFileDirectory(String from, String to){
-        try {
-            ftpClient.rename(from, to);
-        } catch (IOException e) {
-            logger.error("Can't change file directory");
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean processingFile(InputStream file) {
+    private void processingFile(InputStream file) throws Exception {
         String emailAlias;
         String fNameAlias;
         String sNameAlias;
         Set<String> csvHeader;
 
         if(file == null){
-            return false;
+            return;
         }
 
         final int NOT_EXISTS = 0;
         Reader in = new InputStreamReader(file);
         CSVParser records;
 
-        try {
-            records = CSVFormat.RFC4180.withFirstRecordAsHeader().parse(in);
-        } catch (IOException e) {
-            logger.error("Can't parse file", e);
-            return false;
-        }
+        records = CSVFormat.RFC4180.withFirstRecordAsHeader().parse(in);
 
         csvHeader = records.getHeaderMap().keySet();
 
@@ -162,45 +138,33 @@ public class FileMonitor {
         sNameAlias = getEqualsColumn(csvHeader, configService.getHeaders().get("Last name"));
 
         if(emailAlias == null || fNameAlias == null || sNameAlias == null){
-            logger.error("Wrong header, can't get values");
-            return false;
+            throw new Exception("Wrong header, can't get values");
         }
 
         for (CSVRecord record : records) {
-            try {
-                if (redisson.getKeys().isExists(record.get(emailAlias)) == NOT_EXISTS) {
-                    executor.submit(() -> System.out.println(record.get(fNameAlias) + "," + record.get(sNameAlias) + "," + record.get(emailAlias)));
-                    RBucket<Boolean> bucket = redisson.getBucket(record.get(emailAlias));
-                    bucket.set(Boolean.TRUE);
-                } else {
-                    logger.info("Email:" + record.get(emailAlias) + " already exists. Don't call api");
-                }
-            }catch (Exception e){
-                logger.error("Failed parse string", e);
+            if (redisson.getKeys().isExists(record.get(emailAlias)) == NOT_EXISTS) {
+                executor.submit(() -> System.out.println(record.get(fNameAlias) + "," + record.get(sNameAlias) + "," + record.get(emailAlias)));
+                RBucket<Boolean> bucket = redisson.getBucket(record.get(emailAlias));
+                bucket.set(Boolean.TRUE);
+            } else {
+                logger.info("Email:" + record.get(emailAlias) + " already exists. Don't call api");
             }
         }
-
-        return true;
     }
 
     private String getEqualsColumn(Set<String> header, List<String> aliases){
-        String result = null;
-
         for(String alias : aliases){
             if(header.contains(alias)){
-                result = alias;
-                return result;
+                return alias;
             }
         }
 
         return null;
     }
 
-    private String getFirstFile() {
+    private String getFirstFile() throws IOException {
         logger.info("Move to root directory");
-        if(!changeDirectory(ROOT_PATH)){
-            return null;
-        }
+        ftpClient.changeWorkingDirectory(ROOT_PATH);
 
         FTPFile[] files;
 
@@ -220,17 +184,13 @@ public class FileMonitor {
         return null;
     }
 
-    private InputStream retrieveFile(String name){
+    private InputStream retrieveFile(String name) throws IOException {
         InputStream inputStream = null;
 
-        try {
-            inputStream = ftpClient.retrieveFileStream(name);
+        inputStream = ftpClient.retrieveFileStream(name);
 
-            if(ftpClient.completePendingCommand()){
-                logger.info("Retrive file complete");
-            }
-        } catch (IOException e) {
-            logger.error("Can't retrive file " + name, e);
+        if (ftpClient.completePendingCommand()) {
+            logger.info("Retrive file complete");
         }
 
         return inputStream;
