@@ -8,23 +8,23 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import ftp.scan.Configuration;
-import ftp.scan.HeaderService;
+import ftp.scan.ConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.util.*;
 
 @Route(value = "columnMapping")
-public class ColumnMapping extends VerticalLayout {
+public class ColumnMappingView extends VerticalLayout {
     private Configuration configuration;
     private List<TextField> textFields = new ArrayList<>();
     @Value("${column.mapping.key}")
     private String columnMappingKey;
     @Autowired
-    private HeaderService headerService;
+    private ConfigService headerService;
 
 
-    public ColumnMapping(Configuration configuration){
+    public ColumnMappingView(Configuration configuration){
         this.configuration = configuration;
 
         setAlignItems(Alignment.CENTER);

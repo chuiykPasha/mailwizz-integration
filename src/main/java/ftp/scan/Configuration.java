@@ -9,10 +9,10 @@ import java.util.Map;
 
 @Component
 public class Configuration {
-    private HeaderService headerService;
+    private ConfigService headerService;
     private Map<String, List<String>> fieldToAliases = new HashMap<>();
 
-    public Configuration(HeaderService headerService){
+    public Configuration(ConfigService headerService){
         this.headerService = headerService;
     }
 

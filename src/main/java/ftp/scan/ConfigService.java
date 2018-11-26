@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class HeaderService {
+public class ConfigService {
     @Autowired
     private RedissonClient redisson;
     @Value("${column.mapping.key}")
