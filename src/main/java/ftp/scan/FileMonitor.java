@@ -44,7 +44,7 @@ public class FileMonitor {
     @Value("${ftp.user.password}")
     private String ftpUserPassword;
     @Autowired
-    private Configuration configuration;
+    private ConfigService configService;
 
     @Scheduled(fixedDelayString = "${intervalForScan.in.milliseconds}")
     public void pollFiles() throws InterruptedException {
@@ -157,9 +157,9 @@ public class FileMonitor {
 
         csvHeader = records.getHeaderMap().keySet();
 
-        emailAlias = getEqualsColumn(csvHeader, configuration.getFieldToAliases().get("Email"));
-        fNameAlias = getEqualsColumn(csvHeader, configuration.getFieldToAliases().get("First name"));
-        sNameAlias = getEqualsColumn(csvHeader, configuration.getFieldToAliases().get("Last name"));
+        emailAlias = getEqualsColumn(csvHeader, configService.getHeaders().get("Email"));
+        fNameAlias = getEqualsColumn(csvHeader, configService.getHeaders().get("First name"));
+        sNameAlias = getEqualsColumn(csvHeader, configService.getHeaders().get("Last name"));
 
         if(emailAlias == null || fNameAlias == null || sNameAlias == null){
             logger.error("Wrong header, can't get values");
