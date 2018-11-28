@@ -50,16 +50,9 @@ public class FileMonitor {
     @Scheduled(fixedDelayString = "${intervalForScan.in.milliseconds}")
     public void pollFiles() {
         try {
-            if (!ftpClient.isConnected()) {
-                try {
-                    if (!connectToFTP()) {
-                        return;
-                    }
-                } catch (IOException e) {
-                    logger.error("Can't connect to ftp server", e);
-                    return;
-                }
-            }
+           if(!checkConnectionToFTP()){
+               return;
+           }
 
             executor = Executors.newFixedThreadPool(COUNT_THREADS);
             fileName = null;
@@ -89,30 +82,49 @@ public class FileMonitor {
             ftpClient.rename(fileName, PROCESSED_PATH + "/" + fileName);
         } catch (Exception e) {
             logger.error("Can't process file", e);
-            try {
-                logger.info(fileName + " change directory to " + FAILED_PATH);
-                ftpClient.rename(fileName, FAILED_PATH + "/" + fileName);
-            } catch (IOException exc) {
-                logger.error("Can't transfer file to " + FAILED_PATH, exc);
-            }
+            fileToFailedFolder();
         }
     }
 
-    private boolean connectToFTP() throws IOException {
-        ftpClient.configure(new FTPClientConfig(FTPClientConfig.SYST_UNIX));
-        ftpClient.connect(connectionFTP);
-        ftpClient.login(ftpUserName, ftpUserPassword);
-        ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+    private void fileToFailedFolder(){
+        try {
+            logger.info(fileName + " change directory to " + FAILED_PATH);
+            ftpClient.rename(fileName, FAILED_PATH + "/" + fileName);
+        } catch (IOException exc) {
+            logger.error("Can't transfer file to " + FAILED_PATH, exc);
+        }
+    }
 
-        int reply = ftpClient.getReplyCode();
+    private boolean connectToFTP() {
+        try {
+            ftpClient.configure(new FTPClientConfig(FTPClientConfig.SYST_UNIX));
+            ftpClient.connect(connectionFTP);
+            ftpClient.login(ftpUserName, ftpUserPassword);
+            ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
 
-        if(!FTPReply.isPositiveCompletion(reply)) {
-            ftpClient.disconnect();
-            System.err.println("FTP server refused connection.");
-            return false;
+            int reply = ftpClient.getReplyCode();
+
+            if (!FTPReply.isPositiveCompletion(reply)) {
+                ftpClient.disconnect();
+                System.err.println("FTP server refused connection.");
+                return false;
+            }
+
+            return true;
+        } catch (IOException e) {
+            logger.error("Can't connect to ftp server", e);
         }
 
-        return true;
+        return false;
+    }
+
+    private boolean checkConnectionToFTP(){
+        try{
+            return ftpClient.sendNoOp();
+        }catch (Exception e){
+            logger.error("Server connection failed", e);
+            return connectToFTP();
+        }
     }
 
     private void processingFile(InputStream file) throws Exception {
